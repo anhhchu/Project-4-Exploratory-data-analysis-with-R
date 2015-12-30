@@ -1,0 +1,1101 @@
+---
+output: pdf_document
+---
+#PROSPER LOAN 
+#by MAY CHU
+
+========================================================
+
+#ABSTRACT
+
+This project aims to use Exploratory Data Analysis (EDA) to explore the Prosper Loan dataset which includes over 113937 listings of Prosper borrowers. 
+
+Prosper is one of the leading online Peer-to-peer lending platform that connects potential borrowers with potential lenders, filters candidates on both sides of the equation, and sets some rules. Peer-to-peer lending is the new trend in recent years, which allows people to seek out a loan from somewhere other than a traditional banking institution. Instead of going to a bank or a credit union, borrowers can get a loan that comes from individuals looking to earn more interest on their money than promised by traditional savings accounts.
+
+Here how it works: 
+
+* Borrowers choose a loan amount, purpose and post a loan listing. 
+* Investors review loan listings and invest in listings that meet their criteria. 
+* Once the process is complete, borrowers make fixed monthly payments and investors receive a portion of those payments directly to their Prosper account.
+
+This project tends to answer 4 questions:
+
+1. What is the population of Prosper borrowers? 
+2. What factors affect the number of investors  to prosper loan? 
+3. What affect borrower rate and APR?
+4. Loss in charge-off loans?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using
+# in your analysis in this code chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk.
+# This prevents the code from displaying in the knitted HTML output.
+# You should set echo=FALSE for all code chunks in your file.
+
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(tidyr)
+library(GGally)
+library(scales)
+library(memisc)
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+dt<-read.csv("prosperLoanData.csv")
+```
+
+```{r echo=FALSE, Create_function}
+
+#Create function to draw histogram
+f.hist <- function(DS, x, bin, fill, color) { 
+  ggplot(data=DS, aes_string(x=x)) + 
+    geom_histogram(binwidth=bin, fill=fill,color=color)
+}
+
+#Create function to draw bar chart
+f.bar <- function(DS, x, fill, color, xlab, ylab) {
+  ggplot(data=DS,aes_string(x=x)) + 
+    geom_bar(fill=fill, color = color) + 
+    xlab(xlab) + ylab(ylab)
+}
+
+#Create function to draw percentage bar chart
+f.bar.per <- function(DS, x, fill, color, xlab, ylab) {
+  ggplot(data=DS,aes_string(x=x)) + 
+    geom_bar(aes(y=(..count..)/sum(..count..)*100),fill=fill, color = color) + 
+    xlab(xlab) + ylab(ylab)
+}
+```
+
+
+#Univariate Plots Section
+### A. Listing summary 
+####I. Loan term 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+count(dt,Term)
+length(which(dt$Term==36))/length(dt$Term)
+```
+
+There are only 3 loan terms in the dataset: 12,36,60 months. Loans with duration of 36 months (3 years) is the most popular with 87,778 observations (account for 77%). 
+
+####II. Loan original amount
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#Call f.hist function
+f.hist(dt,"LoanOriginalAmount",1000,"#0099cc","#0099cc") + 
+  scale_x_continuous(breaks = seq(0,30000,5000)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+summary(dt$LoanOriginalAmount)
+length(which(dt$LoanOriginalAmount==35000))
+length(which(dt$PercentFunded<1))
+```
+
+75% of the loans smaller than $12000, 50% lie between $4000 to $12000. The maximum loan amount Prosper allows is $35,000. There are 430 loans with the amount of $350,000.
+Not all loans are fully funded, there are 867 partially funded loans. The status of partial funded loans are as the chart below 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#factor LoanStatus by level 
+dt$LoanStatus <- factor(dt$LoanStatus,
+                        levels=c("Cancelled","Current","Completed",
+                                 "FinalPaymentInProgress",
+                                 "Past Due (1-15 days)",
+                                 "Past Due (16-30 days)",
+                                 "Past Due (31-60 days)",
+                                 "Past Due (91-120 days)",
+                                 "Past Due (>120 days)",
+                                 "Defaulted","Chargedoff"))
+
+#Call f.bar.per function
+f.bar.per(subset(dt,PercentFunded<1),"LoanStatus","#0099cc","#0099cc",
+      "Status of partially funded loans","Percentage") +  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+```
+
+####III. Loan purpose
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#Call f.bar.per function 
+f.bar.per(dt,"ListingCategory..numeric.","#0099cc","#0099cc",
+      "Loan purpose","Percentage") +
+  scale_x_discrete(breaks=0:20) 
+  
+```
+
+There are 20 loans purpose: 
+0 - Not Available, 1 - Debt Consolidation, 2 - Home Improvement, 3 - Business, 4 - Personal Loan, 5 - Student Use, 6 - Auto, 7- Other, 8 - Baby&Adoption, 9 - Boat, 10 - Cosmetic Procedure, 11 - Engagement Ring, 12 - Green Loans, 13 - Household Expenses, 14 - Large Purchases, 15 - Medical/Dental, 16 - Motorcycle, 17 - RV, 18 - Taxes, 19 - Vacation, 20 - Wedding Loans
+
+The most common purpose is for Debt consolidation (50%), about 15% of borrowers don't specify their purpose.  
+
+
+####IV. Estimated Performance of the loan
+
+#####1.Prosper rating 
+
+The Prosper Rating assigned at the time the listing was created between HR (worst) - AA (best). Applicable for loans originated after July 2009.
+Prosper Ratings allow potential investors to easily consider a loan application's level of risk because the rating represents an estimated average annualized loss rate range to the investor.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#Factor ProsperRating..Alpha
+dt$ProsperRating..Alpha.<- factor(dt$ProsperRating..Alpha.,
+                                  levels= c("HR","E","D","C","B","A","AA"))
+
+#Draw percentage bar chart of ProsperRating Alpha
+f.bar.per(dt,"ProsperRating..Alpha.","#0099cc","#0099cc",
+      "Prosper Rating","Percentage") + 
+  scale_y_continuous(breaks=seq(0,30,5))
+
+count(dt,ProsperRating..Alpha.)
+```
+
+Prosper rating of C is the most count (represent 16%). Only 5000 borrowers have prosper rating of AA (which is the least count). 26% of the dataset (29084 listings) has blank Prosper Rating. As we know that Prosper Rating was just introduced after 2009. Before that, Prosper used the Credit Grade as the reference for borrowers' credit. The distribution of Credit Grade is shown in the plot below. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Factor Credit Grade
+dt$CreditGrade<- factor(dt$CreditGrade,
+                                  levels= c("NC","HR","E","D","C","B","A","AA"))
+
+#Draw bar chart of Credit grade 
+f.bar(subset(dt,CreditGrade!=" "),"CreditGrade",
+      "#0099cc","#0099cc", "Credit Grade", "Count")
+```
+
+####2. Lender's yield, Estimated Effective Yield, Estimated Loss and Estimated Return
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#Create individual chart of Lender Yield, Effective Yield, Estimated Loss and Estimated Return
+y1 <- ggplot(dt,aes(LenderYield)) + 
+  geom_freqpoly(binwidth=0.01,color="blue")
+
+y2 <- ggplot(dt,aes(EstimatedEffectiveYield)) + 
+  geom_freqpoly(binwidth=0.01,color="orange")
+
+l1 <- ggplot(dt,aes(EstimatedLoss)) +
+  geom_freqpoly(binwidth=0.01,color="red")
+
+y3 <- ggplot(dt,aes(EstimatedReturn)) + 
+  geom_freqpoly(binwidth=0.01,color="green")
+
+#Arrange the 4 chart on the grid
+
+grid.arrange(y1,y2,l1,y3,ncol=1)
+```
+
+Lender yield = interest rate - servicing fee
+Lender yield clusters around 0.05 to 0.3 (5% - 30%)
+
+Effective yield = borrower interest rate - the servicing fee rate - estimated uncollected interest on charge-offs + estimated collected late fees. 
+Most Effective yield fluctuates around 0.1 to 0.3 (10%-30%)
+
+Estimated loss is the estimated principal loss on charge-offs. Most of its values get around 0 to 0.2% (0-20%)
+
+Estimated return = Estimated Effective Yield - Estimated Loss Rate.
+Estimated return value clusters around 10% 
+
+
+###B. Borrower's information
+#### I. Borrower's location 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10, fig.height = 11, dpi = 144}
+#Order the BorrowerState by count
+dt <- within(dt, BorrowerState <- factor(BorrowerState, 
+                                      levels=names(sort(table(BorrowerState), 
+                                                        decreasing=TRUE))))
+
+#Plot the bar chart of Borrower State and arrange by count 
+f.bar(dt, "BorrowerState", "#5588ff", "black", "BorrowerState", "Count") + 
+  coord_flip() + theme(axis.text.y=element_text(size=8))
+
+```
+
+15000 borrowers come from California, which rank it the first place among borrower origin states. States of more than 5000 borrowers include: Georgia, Illinois, Florida, New York and Texas
+
+####II. Occupation 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10, fig.height = 11, dpi = 144}
+
+#Create Occupation dataframe by occupation and rearrange by count
+occupation <- dt %>% group_by(Occupation) %>% 
+  summarize(n=n())%>% arrange(n)
+
+#Draw bar chart of occupation by count
+ggplot(occupation,aes(x=reorder(Occupation,n),y=n)) +
+  xlab("Occupation") +  ylab("Count") + 
+  geom_bar(stat="identity",fill="#5588ff", color="black") + 
+  coord_flip() + theme(axis.text.y=element_text(size=7)) 
+
+```
+
+The are 68 occupations in the list. Many borowers don't specify their occupations (with category Other). There are also missing values
+
+#####III. Employment status
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#Order the EmploymentStatus by count
+dt <- within(dt, EmploymentStatus <- factor(EmploymentStatus, 
+                                      levels=names(sort(table(EmploymentStatus), 
+                                                        decreasing=TRUE))))
+
+#Draw percentage bar chart of EmploymentStatus
+f.bar.per(dt,"EmploymentStatus",
+          "#5588ff","#0099cc","Employment Status","Percentage") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Most of the borrowers are employed (60%), work full-time(20%),part-time (2%) and self-employed (5%)... There are only 835 borrowers unemployed (very small percentage). There are missing values, Other and Not available answer which make it difficult to determine these borrowers' employment status. 
+
+#####Employment status duration
+
+Employment status duration is the length in months of the employment status at the time the listing was created.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+f.hist(dt,"EmploymentStatusDuration",
+       12,"#5588ff","#5588ff") + 
+  scale_x_continuous(limits=c(0,400),breaks=seq(0,400,50))
+```
+
+To have a more general view of employment duration, I will join the duration by years by bucket 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Cut Employment Status Duration to small set of 5 years
+dt$duration.by.bucket <- cut(dt$EmploymentStatusDuration/12,
+                             c(0,5,10,15,20,25,30,35,40))
+
+table(dt$duration.by.bucket)
+
+ggplot(dt,aes(duration.by.bucket)) + geom_bar(fill="#5588ff", color="#5588ff")
+```
+
+From the chart, we can see that nearly 5000 borrowers have stayed in their current status from 1 to 5 years. However, knowing this number doesn't make any sense if we don't know which status they are in. So, I will color the employment status against this bar chart
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Color the bin by Employment Status
+ggplot(dt,aes(duration.by.bucket,fill=EmploymentStatus)) + 
+  geom_bar(position=position_dodge(), color="black") + 
+  scale_fill_brewer(palette="Set1") +
+  theme(legend.position="bottom")
+``` 
+
+It's clear that most borrowers are employed and full-time employed. Over 30,000 borrowers have been employed from 1-5 years. Unemployed borrowers only stay in that status for less than 5 years. 
+
+####IV. Income Range 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Factor income range
+dt$IncomeRange <- factor(dt$IncomeRange, 
+                         levels = c("Not employed", "Not displayed", 
+                                    "$0", "$1-24,999", "$25,000-49,999", 
+                                    "$50,000-74,999", "$75,000-99,999", 
+                                    "$100,000+"))
+
+# Draw bar chart of income range
+ggplot(dt,aes(IncomeRange)) + geom_bar(fill="#5588ff", color="#5588ff") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+summary(dt$IncomeRange)
+```
+
+Over 60000 borrowers earn from 25000 to 75000 annually (account for half of the dataset)
+
+#####Income Range vs. Income Verifiable 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Fill income range by income verifiable
+ggplot(dt,aes(IncomeRange,fill=IncomeVerifiable)) + 
+  geom_bar(position="dodge") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Only a very small number of borrowers cannot verify income. The only exception appears in Not-employed group, but the reason is quite obvious. 
+
+####V. Homeownership
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+count(dt,IsBorrowerHomeowner)
+```
+
+The number of borrowers who own a house is similar to those who don't own the house. It seems having a collateral doesn't affect a Prosper loan listing 
+
+####V. Borrower's Credit Information 
+
+#####1. Prosper Score
+Prosper Score is a custom risk score built using historical Prosper data. The score ranges from 1-11, with 11 being the best, or lowest risk score. Applicable for loans originated after July 2009.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dt$ProsperScore <- factor(dt$ProsperScore)
+
+#Draw percentage bargraph of ProsperScore
+f.bar.per(subset(dt,!is.na(ProsperScore)),"ProsperScore",
+          "#5588ff","#5588ff","ProsperScore","Percentage") + 
+  scale_x_discrete(breaks=1:11)
+```
+
+The most common Prosper Score is 4, 6, 8 (account for nearly 15% each)
+
+#####2.Credit Score
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#Create CreditRange by uniting CreditScoreRangeLower and Upper
+dt <- unite(dt,"CreditRange", 
+            CreditScoreRangeLower, CreditScoreRangeUpper, sep = "-")
+
+#Draw percentage barchart of CreditRange
+f.bar.per(subset(dt,(CreditRange != "NA-NA")), "CreditRange", 
+          "#5588ff","#5588ff","Credit Range","Percentage") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Similar to prosper rating and prosper score, many borrowers have medium credit score range from 640 to 779. Very few have scores lower than 640 or higher than 780.  
+
+#####3.Debt/Income Ratio
+The debt to income ratio of the borrower at the time the credit profile was pulled. This value is Null if the debt to income ratio is not available. This value is capped at 10.01 (any debt to income ratio larger than 1000% will be returned as 1001%).
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Histogram of DebtToIncomeRatio
+f.hist(dt,"DebtToIncomeRatio",0.01, "#5588ff", "#5588ff") + 
+  scale_x_continuous(limits=c(0,1),breaks=seq(0,1,0.1))
+
+summary(dt$DebtToIncomeRatio)
+length(which(dt$DebtToIncomeRatio==10.010))
+```
+
+There are 272 outliers with debt/income ratio =  1001%. However, most borrowers have debt to income ratio smaller than 0.5. The most occurrence is around 0.1 to 0.25.  
+
+#####4. Credit history
+__Current Deliquencies__: Number of accounts delinquent at the time the credit profile was pulled.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(dt$CurrentDelinquencies)
+
+#Joint CurrentDelinquencies by bucket of 5 accounts
+dt$CurrentDelinquence.bucket <- cut(dt$CurrentDelinquencies,c(0,5,10,15,20))
+
+ggplot(dt,aes(CurrentDelinquence.bucket)) + geom_bar(fill="#5588ff")
+```
+
+87.7% Prosper Borrowers (100,000) have no current delinquenct accounts at the time they created the listing.
+
+__Inquiries Last 6 Months__: Number of inquiries in the past six months at the time the credit profile was pulled. Inquiries are the number of times borrowers attempted to borrow money in the past six months
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(dt$InquiriesLast6Months)
+
+#Joint Inquiries6m by bucket of 5 times
+dt$Inquiries6m.bucket <- cut(dt$InquiriesLast6Months,c(0,5,10,15,20,25))
+
+ggplot(dt,aes(Inquiries6m.bucket)) + geom_bar(fill="#5588ff", color="#5588ff")
+```
+
+__Bank card utilization__: The percentage of available revolving credit that is utilized at the time the credit profile was pulled.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Histogram of Bank card utilization
+ggplot(dt,aes(BankcardUtilization*100)) + 
+  geom_histogram(binwidth=1,fill="#5588ff") + xlim(0,150)
+
+#Bank card utilization by percentage 
+f.bar.per(subset(dt,BankcardUtilization > 0), "BankcardUtilization*100",
+          "#5588ff","#5588ff","Bankcard Utilization", "Percentage") + 
+  xlim(0,150)
+
+#length(which(dt$BankcardUtilization>1))
+```
+
+There are nearly 7000 borrowers with 0 bank card utilization. However, among 99,551 (87.4%) borrowers who use their credit cards, there are 63% have the bank card utilization more than 50%. There are 1744 borrowers whose bank card utilization larger than 100%. 
+
+#####6.Prior Prosper Loan Performance
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+length(which(dt$TotalProsperLoans>0)) 
+length(which(dt$TotalProsperLoans>0))/length(dt$TotalProsperLoans)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+f.bar.per(dt, "TotalProsperLoans",
+          "#5588ff","#5588ff","Total prior Prosper Loans", "Percentage") + 
+  scale_x_discrete(breaks=0:5,limits=c(0,5))
+
+count(dt,TotalProsperLoans)
+```
+
+There are 22084 borrowers have prior prosper loans, which account for 19%. Among them, 70% have only 1 prior prosper loans
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Calculate prior prosper loan performance by divide ontime payment on total payment billed
+dt$prior.prosper.performance <- 
+  dt$OnTimeProsperPayments/dt$TotalProsperPaymentsBilled
+
+count(dt,prior.prosper.performance<1)
+
+prop.table(table(dt$prior.prosper.performance<1))
+```
+
+Among 22084 borrowers who have prior prosper loans, there are 18214 borrowers pay on time (82.7%), 3806 (17.3%) borrowers have overdue 
+
+###C. Loan Activity 
+
+####I. Loans actual performance
+Loan status 
+
+```{r echo=FALSE, Univariate_Plots}
+f.bar.per(dt,"LoanStatus",
+          "#77aaff","#77aaff","Loan Status", "Percentage") + 
+  theme(legend.position="bottom")+ 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+There are over 56576 Current loans (50%), over 38074 completed loans (35%) . 
+19077 loans have delinquent which account for 16,7% consisting of: 2067 cases deliquent from 1 to 120 days past-due, 5018 default (121+ days past due) and 11992 Chargeoff loans (150+ days past dues, no expectation of sufficient payment)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+length(which(dt$LP_GrossPrincipalLoss>0))
+length(which(dt$LP_GrossPrincipalLoss>0))/length(dt$LP_GrossPrincipalLoss)
+```
+
+Number of Gross principal Loss cases: 16902 account for 14%
+
+####II. Borrower rate (Interest)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(dt$BorrowerRate)
+
+#Histogram of borrower rate, bin=1
+f.hist(dt,"BorrowerRate*100",1,"#77aaff","black") + 
+  scale_x_continuous(limits = c(0,35),breaks = seq(0,35,5))
+```
+
+Mean interest rate is 19.28%. Haft of the rate is about 13.4% to 25%. The distribution is quite bimodal, which two modes of frequent interest rate: from 14-16% to 31-32%, which is pretty high. 
+
+Do the borrower rate diffirent with different original loan quarter? To discover this, I'll graph the mean of borrower rate against loan origination quarter and year
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Create dataframe rate.vs.time of mean borrower rate by loan origination quarter
+rate.vs.time <- dt %>% group_by(LoanOriginationQuarter) %>%  
+  summarize(mean_borrower.rate=mean(BorrowerRate),
+            mean_APR=mean(BorrowerAPR),n=n()) %>%  
+  arrange(LoanOriginationQuarter)
+
+#Separate quarter from year
+rate.vs.time1 <-separate(rate.vs.time,LoanOriginationQuarter,
+                         c("Quarter","Year"),sep=" ")
+
+ggplot(rate.vs.time1,aes(x=Year,y=mean_borrower.rate,color=Quarter)) + 
+  geom_point(size=5)
+
+```
+
+####III. Borrower APR
+Borrower APR is the Borrower's Annual Percentage Rate (APR) for the loan. APR refers to the total cost of borrowing, as the calculation for APR includes not only the interest rate, but also many other fees the borrower might be charged. So APR is seen as the "effective interest rate," a way for borrowers to compare one loan to another. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Draw histogram of Borrower APR
+f.hist(dt,"BorrowerAPR*100",1,"#77aaff","black") + 
+  scale_x_continuous(limits = c(0,40),breaks = seq(0,40,5))
+
+```
+
+The Borrower APR distribution looks similar to that of borrower rate, although the histogram shifts rightward, indicating that the APR is generally larger than interest rate. But how large is the difference? 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Calculate the difference in rate of APR and Rate
+dt$difference.in.rate <- (dt$BorrowerAPR-dt$BorrowerRate)
+
+summary(dt$difference.in.rate*100)
+
+#draw freq polygon of the difference in rate
+ggplot(dt,aes(difference.in.rate*100)) + 
+  geom_freqpoly(binwidth=0.1, color="darkred",size=0.5) + 
+  scale_x_continuous(limits=c(0,10),breaks=seq(0,10,1)) 
+```
+
+As the APR is equal to interest rate plus fees. The most common fees are around 0.5-1%, 2-3% and 3.5-4%. What cause the difference in fees?
+
+####IV. Investors
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(dt$Investors)
+
+f.hist(dt,"Investors",1,"#77aaff","#77aaff") + ylim(0,1000)
+```
+
+75% of loans have less than 115 investors. There are outliers, however, some loans have more than 1000 investors. I wonder what make these loans so attractive.
+The distribution of investor counts is right-skewed. To make it normal, I'll transform it to log10 to reduce skewness
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(dt,aes(log10(Investors))) + geom_histogram(fill="#77aaff") +  
+  scale_x_continuous(breaks=seq(0,3,0.5))
+
+count(dt,Investors==1)
+```
+
+There are over 27000 loans with only 1 investors, I will cut that out of the histogram to have a better feel of investor distribution 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(dt,aes(log10(Investors))) + geom_histogram(binwidth=0.1,fill="#77aaff", color="#77aaff") + scale_x_continuous(limits=c(0.4,3.0),breaks=seq(0,3,0.5))
+```
+
+# Univariate Analysis
+
+### What is the structure of your dataset? 
+This data set contains 113,937 loans with 81 variables on each loan. 
+The variables can be classified into 3 categories:
+1. Listing summary: the summary of information about the loan application based on which lenders can make investing decisions (prosper rating, loan term, loan amount, loan purpose and estimated performance of a loan such as estimated effective yield, estimated lender yield, estimated loss rate and estimated return rate)
+2. Borrower's information: borrowers' geography, employment status and status duration, prosper score, borrower's credit history such as credit score, prosper score, number of credit lines and current/past delinquencies...
+3. The loan activity: the status of loans, number of investors, the borrower rate/APR and the loans' performance
+
+### What is/are the main feature(s) of interest in your dataset? 
+- The number of investors participate in a loan
+- The interest rate (borrower rate) and APR of the loan
+- The underperformed loans (charge-off loans)
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+
+- What factors deciding the borrower rate and APR of a loan: prosper rating, estimated loss rate and loan term... 
+- What attract investors to a loan: I suspect that investor may look at prosper rating, lender yield, return yield, employment status, debt to income ratio, credit rating... to decide whether a loan is rewarding
+- Common features of underperfomed loans: prosper rating, debt to income ratio, delinquencies history, proser loan history or public record...
+
+### Did you create any new variables from existing variables in the dataset? 
+I created several new variables
+- difference.in.rate: show the difference between borrower APR and borrower rate
+- duration.by.bucket: join the duration of employment status duration into different intervals 
+- rate.vs.time: group the dataset by quarter and year to compare the borrower's rate
+- CreditRange: a range of lower and upper Credit Score 
+- prior.prosper.performance: the performance of the prior prosper loan, which represent the ratio of on time payment on total billed payments. 
+- CurrentDelinquence.bucket, Delinquence7year.bucket, Inquiries6month.bucket
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+The investor distribution is right-skewed. So I take the log10 of the number of investors to create a more normal distribution. I hope to build a regression model for this variable later.
+
+# Bivariate and Multivariate Plots Section
+
+##I. Prosper Rating & Estimated Loss Rate 
+
+Prosper Rating represents an estimated average annualized loss rate range to the investor.
+The estimated loss rate is based on the historical performance of Prosper loans with similar characteristics. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Draw histogram of Estimated Loss, color by Prosper Rating, binwidth =0.01
+ggplot(dt,aes(EstimatedLoss)) + 
+  geom_histogram(aes(fill=ProsperRating..Alpha.),binwidth=0.01) + 
+  scale_x_continuous("Prosper Rating by Estimated Loss",breaks=seq(0,1,0.05)) + 
+  theme(legend.position="bottom")
+
+#Draw boxplot of ProsperRating and Estimated Loss
+ggplot(dt,aes(ProsperRating..Alpha.,EstimatedLoss*100)) + 
+  geom_boxplot() + scale_y_continuous(limits=c(0,20))
+```
+
+Prosper Rating vs.	Estimated Avg. Annual Loss Rate
+
+* AA 0.00 - 1.99%
+* A	2.00 - 3.99%
+* B	4.00 - 5.99%
+* C	6.00 - 8.99%
+* D	9.00 - 11.99%
+* E	12.00 - 14.99%
+* HR > 15.00%
+
+## Estimated Loss by Prosper Score and Credit Range
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Draw boxplot of Credit Range and EstmatedLoss
+ggplot(dt,aes(x=CreditRange,y=EstimatedLoss)) + geom_boxplot() + 
+  coord_cartesian(ylim = c(0.0,0.15)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Higher credit score, lower estimated loss. Estimated loss' means drops with the increase in credit range. The same phenomenon can be observed in the effect of Prosper Score on Estimated loss 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Boxplot of Prosper Score and Estimated Loss
+ggplot(dt,aes(x=ProsperScore,y=EstimatedLoss)) + geom_boxplot() + 
+  coord_cartesian(ylim=c(0,0.2))
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Only select Credit Range bigger than 600 
+selected<-c("600-619","620-639","640-659","660-679","680-699",
+            "700-719","720-739","740-759","760-779","780-799",
+            "800-819","820-839","840-859","860-879","880-899")
+
+dt$ProsperScore <- as.numeric(dt$ProsperScore)
+
+#Mean estimated loss by Prosper Score and credit Range 
+ggplot(dt[dt$CreditRange %in% selected,],aes(ProsperScore,EstimatedLoss)) + 
+  geom_line(aes(color=CreditRange),stat="summary", fun.y = mean, size=1) + 
+  scale_x_discrete(breaks = 1:11) +
+  geom_line(stat="summary",fun.y=mean,linetype=2) + 
+  ggtitle("Mean estimated loss by Prosper Score and Credit Range")
+```  
+
+Clearly, mean estimated loss goes down with the increase in Prosper Rating and Credit Range, which shows a strong negative linear relationship. 
+
+##Prosper Score
+
+The Prosper score estimates the probability of a loan going "bad," where "bad" is the probability of going 60+ days past due within the first twelve months from the date of loan origination. Applicants from April, 2008 through April, 2011 were used to build the discrete additive scorecard. The scorecard was verified and results validated on an independent validation sample of loans booked during the same time period as well as a more recent sample of loans booked outside of the loan development period.
+
+Key variables in the scorecard are:
+- Number of inquiries on the credit bureau: InquiriesLast6Months
+- Number of delinquent accounts on the credit bureau: CurrentDelinquencies
+- Credit card utilization on the credit bureau: BankcardUtilization
+- Number of recently opened trades on the credit bureau: TradesOpenedLast6Months
+- Debt to income ratio: DebtToIncomeRatio
+- Loan payment performance on prior Prosper loans 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#seperate the date of loan origination  
+dt<-separate(dt, LoanOriginationDate, c("Month","Day","Year.Time"), sep = "/")
+dt<-separate(dt, Year.Time, c("Year","Time"), sep = " ")
+
+#subset applicants from April, 2008 through April, 2011 and create a scorecard
+s1<-subset(dt, Year > 2007 & Year < 2012)
+s2<-s1[!(s1$Year==2008 & s1$Month<4),]
+scorecard<-s2[!(s2$Year==2011 & s2$Month>4),]
+
+scorecard$ProsperScore <- as.numeric(scorecard$ProsperScore)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Create boxplot of Inquiries last 6 months and ProsperScore
+ggplot(subset(scorecard,!is.na(ProsperScore)),
+       aes(Inquiries6m.bucket, ProsperScore)) + 
+  geom_boxplot()
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Create bin2d between current delinquencies and prosper score
+ggplot(subset(scorecard,!is.na(ProsperScore)), 
+       aes(CurrentDelinquencies, ProsperScore)) + geom_bin2d() + 
+  scale_y_discrete(breaks=1:11)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Create boxplot between bankcard utilization and prosper score
+scorecard$ProsperScore <- factor(scorecard$ProsperScore)
+
+ggplot(scorecard,aes(ProsperScore,BankcardUtilization)) + geom_boxplot() + 
+  scale_x_discrete(breaks=1:11) +
+  ylim(0,1) + coord_flip() 
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Create boxplot between debt to income ratio and prosper score
+scorecard$ProsperScore <- factor(scorecard$ProsperScore)
+
+ggplot(scorecard,aes(ProsperScore,DebtToIncomeRatio)) + geom_boxplot() + 
+  scale_x_discrete(breaks=1:11) +
+  ylim(0,0.5) + coord_flip() 
+```
+
+Trying to build a sub dataset from April 2008 to April 2011 and graphing the key variables in scorecard against the Prosper Score, I can see that Prosper Score has negative relationship with inquiries last 6 month, current delinquencies, bankcard utilization and debt to income ratio... However, this relationship is not clear and hard to quantify. 
+
+##II. What affect the loan interest rates 
+
+###Prosper rating and Credit Grade on Borrower Rate 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Boxplot of prosper rating and borrower rate
+ggplot(subset(dt,!is.na(ProsperRating..Alpha.)),
+       aes(ProsperRating..Alpha.,BorrowerRate)) +
+  geom_boxplot() + 
+  coord_cartesian(ylim=c(0.0,0.35)) + xlab("Prosper Rating")
+```
+
+Clearly, Borrower Rate decreases when Prosper Rating increases. Before July 2009, Prosper used Credit Grade to calculate Borrower Rate. I'll use graph Borrower Rate on Credit Grade for loan from 2005 to 2009
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dt$CreditGrade <- factor(dt$CreditGrade,
+                         levels= c("HR","E","D","C","B","A","AA"))
+
+#Boxplot of Credit Grade and Borrower Rate
+ggplot(subset(dt,!is.na(CreditGrade)),aes(CreditGrade,BorrowerRate)) +
+  geom_boxplot()
+```
+
+Although the same range of Borrower rate is assigned to the same level of credit grade and prosper rating, the fundamental difference is the way credit grade and prosper rating determined. Credit Grade is based only on credit bureau score (AA: 760+, HR: 520-559) Prosper Rating takes in various credit information of borrowers including prior prosper loans performance
+
+###Estimated Loss on Borrower Rate
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Scatterplot of Estimated loss on borrower rate
+ggplot(dt,aes(EstimatedLoss,BorrowerRate)) + 
+  geom_point(color="#f37736",shape=21)
+
+#Scaterplot with fitted line
+ggplot(dt,aes(EstimatedLoss,BorrowerRate)) +  
+  geom_point(color="#f37736",size=3) + 
+  coord_cartesian(xlim=c(0,0.2),ylim=c(0,0.4)) + 
+  stat_smooth(method="lm",size=1)
+
+cor(dt$EstimatedLoss, dt$BorrowerRate, use = "complete.obs")
+```
+
+When estimated loss increases, borrower rate also increases and the borrower rate becomes more disperse. The correlation between estimated loss and borrower rate is high 94.5%, showing a strong and positive correlation 
+
+###Estimated Loss on Borrower Rate color by Prosper Rating
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Multivariate_Plots}
+ggplot(dt,aes(EstimatedLoss,BorrowerRate)) +  
+  geom_point(aes(color= ProsperRating..Alpha.),size=3) + 
+  coord_cartesian(xlim=c(0,0.2),ylim=c(0,0.4)) +
+  stat_smooth(method="lm",size=1)
+```
+
+###Estimated Loss on Borrower Rate, facet by Term
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+p1 <- ggplot(dt, aes(EstimatedLoss,BorrowerRate)) +  
+  geom_point(color = "orange", size=3) + 
+  stat_smooth(method="lm") + facet_wrap(~Term) + 
+  scale_y_continuous(limits=c(0,0.4)) + 
+  theme(legend.position = "bottom")
+
+p1
+```
+
+Borrower Rate is positively correlated with estimated loss. Higher prosper rating borrowers have lower borrower rate. We can see clearly that different prosper rating is associated with a specific borrower rate. 
+Loan with term of 36 months have borrower rate most dispersed, maybe because most loans have term of 36 months. The other terms show perfect correlation. 
+
+###What affect the difference between borrower rate and borrower APR
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dt$Term <- factor(dt$Term, levels = c(12, 36, 60))
+
+#Boxplot of term and difference in rate
+ggplot(dt,aes(Term, difference.in.rate)) + geom_boxplot() + 
+  coord_cartesian(ylim = c(0,0.1))
+
+by(dt$difference.in.rate*100, dt$Term, summary)
+
+```
+
+It's clear that the difference between borrower rate and APR is determined by term. 50% of Loans with duration of 1 year has range from 5.7% to 7.9%; 3 years from 1.423 to 3.7%; and 5 years from 2.3 to 2.5%. This difference also fluctuates with Prosper Rating. We can see that only loans with high Prosper Rating can apply for term of 5 years from the chart below
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Boxplot of term on difference in rate facet by Prosper Rating 
+ggplot(dt,aes(Term, difference.in.rate*100)) + geom_boxplot() + 
+  facet_wrap(~ProsperRating..Alpha.) + coord_cartesian(ylim = c(0,10))
+
+by(dt$difference.in.rate*100, dt$ProsperRating..Alpha., summary)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Scatterplot of Estimated loss on Borrower Rate and difference in Rate facet by Term 
+p1 + geom_line(aes(EstimatedLoss, difference.in.rate, 
+                   color="difference.in.rate")) + 
+  ggtitle("Estimated Loss and Term on Borrower Rate and Difference in Rate") +
+  theme(legend.title=element_blank())
+```
+
+
+## Number of investors sponsoring a loan
+__What draws investors to a loan__
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Subset data from after July 2009
+dtAfter2009 <- dt[!(dt$Year<2009 & dt$Month<7),]
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Take some variables which likely to affect number of investors 
+affect.investor <- dtAfter2009[c("BorrowerAPR","BorrowerRate","LenderYield",
+                              "EstimatedLoss","EstimatedEffectiveYield",
+                              "EstimatedReturn",
+                              "ProsperScore","ProsperRating..Alpha.",
+                              "DebtToIncomeRatio", "Investors")]
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 18, fig.height = 10, dpi = 144}
+# Create ggpair plot
+set.seed(20022012)
+
+samp <- affect.investor[sample(1:length(affect.investor$Investors), 10000), ]
+
+ggpairs(samp, params = c(shape = I('.'), 
+                         outlier.shape = I('.')), axisLabels = "internal")
+
+```
+
+From this chart, I can see very good correlation among borrower rate, borrower APR, lender yield, effective yield and estimated return. This is obvious because these rates are calculated from each other. For example, lender's yield is equal borrower rate less servicing fee. However, what astounds me the most is that these variables have very weak correlation with the investor count. For instance, correlation between lender's yield and investors is only -0.249. This is beyond my expectation.  
+
+When continuous variables show little effect on investor number, I'll try to graph the investor number against nominal variables such as prosper rating, income range, although relationship between nominal and continuous variables can be difficult to quantify. 
+
+__Prosper Rating on Investor counts__:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Boxplot of Prosper Rating on Investor
+ggplot(dt,aes(ProsperRating..Alpha.,Investors)) + geom_boxplot() + 
+  coord_cartesian(ylim=c(0,300)) + xlab("Prosper Rating")
+
+by(dt$Investors,dt$ProsperRating..Alpha., summary) 
+```
+
+The better Prosper Rating, the more investors. For example: for rating AA, 50% of Investor count range from 63 to 274 with mean 150. For rating HR, 50% of Investor count range from 9 to 54 with mean 35 investors. 
+
+__Income Range on Investor counts__
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(dt,aes(IncomeRange,Investors)) + geom_boxplot() + 
+  coord_cartesian(ylim=c(0,200)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Investors number get a bit higher with the increase in income range. The same thing can be observed between investor number and debt to income ratio
+
+__Debt to Income Ratio on Investor count__
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(dt,aes(DebtToIncomeRatio,Investors)) + 
+  geom_jitter(alpha=0.5, color="#ff6d83",type=21)
+```
+
+Borrowers who have debt to income ratio lower than 1 attract most investors (risk averse). However, there're investors who accept very high debt to income ratio of 10.01 (which is larger than 1000 percent). Also this relationship is not linear, which explains why our correlation coefficient is very poor (0.00176)
+
+__Lender Yield on Investor count__
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(dt,aes(LenderYield,Investors)) + 
+  geom_jitter(color="#ff6d83", shape=21, alpha=0.5) + 
+  stat_smooth(method="lm") + 
+  scale_x_continuous(limits=c(0,0.4))
+```
+
+Investors don't prefer very high lender yield because high lender yield means high borrower rate, means high risk. That's why we can see the number of investors go down when lender yield increase. Most preferred rate is around 10%
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Scatterplot of Lender yield on Investors, facet by Prosper Rating
+ggplot(subset(dt, !is.na(LenderYield)),aes(LenderYield,Investors)) + 
+  geom_jitter(aes(color=ProsperRating..Alpha.),shape=21, alpha=0.5) + 
+  facet_wrap(~ProsperRating..Alpha.)
+```
+
+__Estimated return on Investor count__
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Scatterplot of Estimated Return on Investors, facet by Prosper Rating
+ggplot(subset(dt, !is.na(ProsperRating..Alpha.)),
+       aes(EstimatedReturn,Investors)) + 
+  geom_jitter(aes(color=ProsperRating..Alpha.),shape=21, alpha=0.5) + 
+  facet_wrap(~ProsperRating..Alpha.)
+```
+
+Similar to lender yield, investors prefer estimated return around 10%. When they invest in lower Prosper Rating loans, they expect higher return (10-20%). But there are also investors accept negative estimated returns and invest in HR loans. 
+
+__Loans with low and high number of investors:__
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Prosper Rating barchart of loans with 1 investor 
+ggplot(subset(dt,Investors == 1),aes(ProsperRating..Alpha.)) + 
+  geom_histogram(aes(fill=ProsperRating..Alpha.)) + 
+  ggtitle("Prosper Rating of loans with 1 investor") + 
+  theme(legend.position="none") + 
+  ylab("Count") + xlab("Prosper Rating")
+
+#Prosper Rating barchart of loans with over 100 investors 
+ggplot(subset(dt,Investors > 100 & !is.na(ProsperRating..Alpha.)),aes(ProsperRating..Alpha.)) + 
+  geom_histogram(aes(fill=ProsperRating..Alpha.)) + 
+  ggtitle("Prosper Rating of loans with over 100 investors") + theme(legend.position="none") + ylab("Count") + xlab("Prosper Rating")
+```
+
+The popular rating for loans with only 1 investors is C with 8000 loans.The popular rating for loans with more than 100 investors are A with approximately 5500 counts.
+
+## Underperformed loans
+
+This section we will work with underperformed loans (charged-off loans) and discover their common patterns 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Create a underperform dataset consisting of Charge-off loans
+underperform <- subset(dt,LoanStatus=="Chargedoff")
+
+length(underperform$LoanStatus)
+length(underperform$LoanStatus)/length(dt$LoanStatus)
+```
+
+There are 11992 charged off loans (account for 10.5% )
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Histogram of Prosper Rating of underperform loans
+ggplot(underperform,aes(EstimatedLoss)) + 
+  geom_histogram(aes(y=(..count..)/sum(..count..),
+                     fill=ProsperRating..Alpha.), binwidth = 0.01) + 
+  ylab("Percentage") + ggtitle("Prosper Rating of underperform loans") + 
+  theme(legend.position = "bottom")
+```
+
+Most borrowers with chargeoff loss have Prosper Rating lower than D and estimated loss larger than 10%. 
+
+__Performance of charged off loan__
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#Create gross_percentage_loss in underperform dataset
+underperform$gross_percentage_loss <- underperform$LP_GrossPrincipalLoss/underperform$LoanOriginalAmount
+
+#Create net percentage_loss in underperform dataset 
+underperform$percentage_loss <- underperform$LP_NetPrincipalLoss/underperform$LoanOriginalAmount
+
+#Create a scatterplot of gross_percentage_loss and Investors 
+ggplot(underperform, aes(gross_percentage_loss*100, Investors)) + 
+  geom_jitter(alpha=0.25, color="#ff6d83") + xlab("Gross Principal Loss(%)")
+
+#Create a scatterplot of gross_percentage_loss and Investors 
+ggplot(underperform, aes(percentage_loss*100, Investors)) + 
+  geom_jitter(alpha=0.25, color="#ff6d83") + xlab("Net Principal Loss (%)")
+
+prop.table(table(underperform$percentage_loss>0.5))
+```
+
+For both Gross Principal Loss and Net Principal Loss, the thickest area lies from 50% to 100% and under 100 investors. Nearly 81% of Net percentage loss is over 50%. 
+
+Facet the chart using Prosper Rating, we see how Prosper Rating affect the investors number to a loan (a pattern we have discovered earlier). Low investor count usually go with low Prosper rating, and those loans with low ratings tend to have high percentage loss when it comes to charge off loans 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Scatterplot of Investors by net principal loss, facet by Prosper Rating 
+ggplot(subset(underperform,!is.na(ProsperRating..Alpha.)), 
+       aes(percentage_loss*100, Investors)) + 
+  geom_jitter(alpha=0.5, aes(color=ProsperRating..Alpha.)) + 
+  xlab("Net Principal Loss") + facet_wrap(~ProsperRating..Alpha.)
+```
+
+There are some cases, however, that the investors can recover of their investments. In those cases, Net Principal Loss is smaller than Gross Principal Loss. We can observe the phenomenon more clearly in the chart below where many points lie below the equate line of gross principal loss and net principal loss
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Scatterplot of net principal loss and gross principal loss, facet by Prosper Rating 
+ggplot(underperform,aes(gross_percentage_loss*100, percentage_loss*100)) + 
+  geom_point(color="#ff6d83") + ylim(0,100) + 
+  xlab("Gross Principal Loss(%)") + ylab("Net Principal Loss (%)")
+```
+
+This brings me to a question of how accurate the estimated loss Prosper calculated in comparison to the actual loss investors have to suffer
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Scatterplot of estimated loss and actual net principal loss 
+ggplot(underperform,aes(EstimatedLoss, percentage_loss)) + 
+  geom_point(color="#ff6d83") + xlim(0,1) + geom_abline(slope=1,intercept=0) + 
+  xlab("Estimated Loss") + ylab("Actual Net Principal Loss")
+```
+
+Sadly, the forecast is not even close. The actual loss is much higer than the estimated loss that Prosper uses to determine Prosper Rating based on such investors may make their decision. 
+
+# Bivariate and Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+
+We learn from Loan purpose that most borrowers come to Prosper to find a means to settle their debt. This explains why Bank card utilization of most borrowers is high, and most of them don't have very good prosper score, credit range as well as prosper rating. 
+
+Prosper uses Prosper Score and Credit Score to determine the Estimated Loss Rate. Estimated Loss Rate is then employed to calculate the Borrower Rate and to determine Prosper Rating. Term affects Borrower APR when Prosper imposes different service fee on different loan terms borrowers apply for.  
+
+Lender yield, Estimated effective yield and Estimated return are all derived from Borrower Rate. That's why these rates show high correlation to each other. And because they are inter-dependent, it's not useful to throw them together to predict effect on another variable (for example: investor count). At best, we can only use one of them as the predictor (lender yield or borrower rate, estimated loss rate). However, the correlation between such rate and investor count is negative and weak (~ -0.3%). This can infer that lenders participating to Prosper Loans are quite risk adverse. Still I cannot find any factors which affect investors' decision strongly. Prosper Rating is a good indicator, but not a dominant factor. Hence, I think investor's choice to invest in a loan is quite intuitive.
+
+When investigating charged-off loans, I also realize that the estimated loss rate will not accurately predict the actual loss rate. Therefore, investors should be careful to base their decisions on such information. 
+
+### What was the strongest relationship you found? 
+The strongest relationship I'm able to observe in this dataset is between estimated loss rate and borrower rate. Hence, I will build linear model to predict borrower rate based on estimated loss rate
+
+#Prediction Model
+
+##Linear Model of Borrower Rate
+Now I will build a model to predict the Borrower Rate based on Estimated Loss Rate as they show good correlation to each other. As Estimated Loss was only calculated after July 2009, I will predict based on a sub dataset after July 2009
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+m1 <- lm(BorrowerRate ~ EstimatedLoss,data=dtAfter2009)
+mtable(m1)
+```
+
+So let assume a listing has Estimated Loss of 0.0049, what is the estimated value of borrower rate given confidence level of 95%
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Predict Borrower Rate with specific Estimated Loss 
+thisListing = data.frame(EstimatedLoss = 0.0049)
+modelEstimate = predict(m1, newdata = thisListing, 
+                        interval = "prediction", level = .95)
+modelEstimate
+```
+
+Borrower Rate of this listing has mean value of 0.08, and 95% chance that the rate will be from 0.035 to 0.13. 89.4% variability in Borrower Rate can be explained by that in Estimated Loss. 
+This model only uses Estimated Loss as the predictor because (1) it has good correlation coefficient with Investor counts (2) as Estimated loss is derived from many other variables in the dataset (Prosper Score, Credit Range, borrowers' credit history, Prosper Rating), throwing those variables into the model can cause multicollinearity.  
+
+##Multilinear Model of Estimated Loss
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+l1 <- lm(EstimatedLoss ~ ProsperScore,data=dtAfter2009)
+l2 <- update(l1, ~. + CreditRange)
+mtable(l1,l2)
+```
+
+------
+
+# Final Plots and Summary
+
+### Plot One: Estimated Loss by Prosper Score and Credit Range 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_One}
+# Line chart of Prosper Score, Credit Range on Estimated Loss
+ggplot(dt[dt$CreditRange %in% selected,],aes(ProsperScore,EstimatedLoss)) + 
+  geom_line(aes(color=CreditRange),stat="summary", fun.y = mean, size=1) + 
+  scale_x_discrete(breaks = 1:11) +
+  geom_line(stat="summary",fun.y=mean,linetype=2) + 
+  ggtitle("Mean estimated loss by Prosper Score and Credit Range")
+```
+
+### Description One
+
+This plot shows the effect of Prosper Score and Credit Range on Mean estimated loss. Estimated loss is higher with lower Prosper Score and Credit Range. 
+
+### Plot Two: 
+Borrower Rate and Borrower APR by Estimated Loss and Term
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_Two, fig.width = 11, fig.height = 11, dpi = 144}
+
+dt$Term <- factor(dt$Term)
+
+p1 + geom_line(aes(EstimatedLoss, difference.in.rate, 
+                   color="difference.in.rate")) + 
+  ggtitle("Estimated Loss and Term on Borrower Rate and Difference in Rate") +
+  theme(legend.title=element_blank())
+```
+
+### Description Two
+
+The second plot answers the question of what influence the Borrower Rate and Borrower APR. Since we can see the good linear relationship between Estimated Loss and Borrower Rate, as well as how Term affects the difference between Borrower Rate and APR, we have a better idea of what Prosper will look at when determining Borrower Rate and Borrower APR
+
+### Plot Three: 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_Three}
+# Draw scatterplot of Estimated loss and actual net principal loss
+ggplot(underperform,aes(EstimatedLoss, percentage_loss)) + 
+  geom_point(color="#ff6d83") + xlim(0,1) + geom_abline(slope=1,intercept=0) + 
+  xlab("Estimated Loss") + ylab("Actual Net Principal Loss") + 
+  ggtitle("Estimated Loss vs. Actual Loss in Charge-off loans")
+```
+
+### Description Three
+
+Watch out!!! Forecast is just forecast. The estimated loss rate is much lower than the actual loss rate when it comes to charge-off loans. As Prosper uses estimated loss rate to determine Prosper Rating, borrower rate and consequently lender's yield as well as estimated return; lenders who merely base their decision on those factors are risking losing more than what they expect.  
+
+------
+
+# Reflection
+
+There are 81 variables in this dataset, but the variables used to make lending decisions are boiled down to several ones including Prosper Rating and Estimated Loss Rate; Prosper Score and Credit Range; Lender yield, estimated effective yield and estimated return... I wonder where borrowers' information such as credit history, bankcard utilizaton, delinquencies,.. go into this process? 
+
+Prosper claims that they use a discrete scorecard built on applications from April 2008 to April 2011 to determine the Prosper Score. The scorecard takes in variables of borrowers' credit information. However, graphing the Prosper Score against these variables, I see negative correlation but not enough to quantify. Lacking of domain knowledge, I was unable to build and test the effectiveness of this scorecard in determining Prosper Score, which in turn affects Estimated Loss Rate. Keeping in mind that Estimated Loss Rate is then used to decide Borrower Rate and Prosper Rating. The accuracy of the score card is critical to enhance Prosper's ability to estimate yield and return for investors. However, from the dataset we can see that the accuracy of estimated loss rate is very poor. Investors should be careful when using these factors in their decision making process. 
+
+I didn't build a model to predict investor number, because the correlation of various factors on investor counts is weak. Building a model with such low R square can be ineffective. Instead, I build a linear model to determine Estimated Loss Rate with good R square of 89.9%. 
+
+
