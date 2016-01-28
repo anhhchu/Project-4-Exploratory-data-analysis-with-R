@@ -1,7 +1,7 @@
 # Exploratory-data-analysis-with-R
 
 ##File arrangment
-ProsperLoan.html is the summary file
+ProsperLoan.html is the summary file <br>
 ProsperLoan.Rmd is the source code file
 
 ##Project Overview
